@@ -106,6 +106,18 @@ struct PIFGenerator {
         configuration.buildSettings["MARKETING_VERSION"] = "1.0"
         configuration.buildSettings["CURRENT_PROJECT_VERSION"] = "1"
 
+        // SwiftPM's PIF builder turns testability on for every configuration, including Release,
+        // so that `swift test` can `@testable import` a package target. That is wrong for a
+        // framework we ship as a binary: `-enable-testing` gives internal declarations public
+        // linkage and exposes their bodies to clients, so a consumer can inline a public function
+        // whose body touches an internal type and end up referencing that internal symbol
+        // directly. Anyone who later rebuilds this module from source without testability (an
+        // Xcode archive, for instance) does not export those symbols, and the link fails with
+        // undefined symbols. Match Xcode's stock behaviour instead: testability in Debug only.
+        if configuration.name.caseInsensitiveCompare("release") == .orderedSame {
+            configuration.buildSettings["ENABLE_TESTABILITY"] = false
+        }
+
         let frameworkType = buildOptionsMatrix[name]?.frameworkType ?? buildOptions.frameworkType
 
         // Set framework type
