@@ -59,4 +59,32 @@ struct ManifestLoaderTests {
 
         #expect(manifest.name == "MyFramework")
     }
+
+    @Test
+    func reportsWhichManifestFieldFailedToDecode() async throws {
+        // `products` is required, so omitting it fails the decode. The reported message has to name
+        // the field: `DecodingError.localizedDescription` alone only says the data "isn't in the
+        // correct format", which leaves nothing to act on.
+        let manifestMissingProducts = """
+        {
+          "name": "MyFramework",
+          "toolsVersion": { "_version": "6.1.0" },
+          "dependencies": [],
+          "targets": [],
+          "packageKind": { "root": ["/tmp/MyFramework"] }
+        }
+        """
+        let executor = StubbableExecutor { arguments in
+            StubbableExecutorResult(arguments: arguments, success: manifestMissingProducts)
+        }
+        let loader = ManifestLoader(executor: executor)
+
+        await #expect {
+            try await loader.loadManifest(for: URL(filePath: "/tmp/MyFramework"))
+        } throws: { error in
+            let description = error.localizedDescription
+            return description.contains("/tmp/MyFramework")
+                && description.contains("products")
+        }
+    }
 }

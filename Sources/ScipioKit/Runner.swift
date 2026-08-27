@@ -22,7 +22,9 @@ public struct Runner {
             case .platformNotSpecified:
                 return "Any platforms are not spcified in Package.swift"
             case .invalidPackage(let path, let underlyingError):
-                return "Invalid package. \(path.path)\n\(underlyingError.localizedDescription)"
+                let reason = (underlyingError as? DecodingError)?.detailedDescription
+                    ?? underlyingError.localizedDescription
+                return "Invalid package. \(path.path)\n\(reason)"
             case .compilerError(let error):
                 return "\(error.localizedDescription)"
             }
