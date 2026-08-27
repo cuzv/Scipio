@@ -49,11 +49,24 @@ extension PackageResolver {
                 )
                 let artifactsURL = artifactsLocation.artifactURL(rootPackageDirectory: rootPackageDirectory)
 
-                return if fileSystem.exists(artifactsURL) {
-                    artifactsLocation
-                } else {
-                    .local(resolveTargetFullPath(of: target, dependencyPackage: dependencyPackage))
+                if fileSystem.exists(artifactsURL) {
+                    return artifactsLocation
                 }
+
+                // A downloaded artifact is named after the XCFramework inside the archive, which
+                // need not match the target name: `.binaryTarget(name: "StartAppSDK", url:
+                // ".../StartApp.xcframework.zip")` unpacks to `StartAppSDK/StartApp.xcframework`.
+                // Look the XCFramework up by extension before concluding the target is local,
+                // otherwise a remote target is misread as one whose artifact lives in the
+                // checkout's sources.
+                if let downloadedArtifactURL = findDownloadedXCFramework(
+                    packageIdentity: dependencyPackage.identity,
+                    targetName: target.name
+                ) {
+                    return .local(downloadedArtifactURL)
+                }
+
+                return .local(resolveTargetFullPath(of: target, dependencyPackage: dependencyPackage))
             }()
 
             return .binary(artifactType)
@@ -128,6 +141,32 @@ extension PackageResolver {
                         ?? []
                 )
             }
+        }
+
+        /// Finds the XCFramework unpacked for a remote binary target, whatever it is named.
+        ///
+        /// Returns `nil` when the artifact directory is absent or holds no unambiguous
+        /// XCFramework, leaving the caller to fall back to local path resolution.
+        private func findDownloadedXCFramework(
+            packageIdentity: String,
+            targetName: String
+        ) -> URL? {
+            let artifactDirectory = rootPackageDirectory
+                .appending(components: ".build", "artifacts", packageIdentity, targetName)
+
+            guard let entries = try? fileSystem.getDirectoryContents(artifactDirectory) else {
+                return nil
+            }
+
+            let xcFrameworks = entries
+                // Archives made on macOS carry a `__MACOSX` sidecar holding a shadow copy of the
+                // XCFramework; it is metadata, not a usable artifact.
+                .filter { $0 != "__MACOSX" }
+                .map { artifactDirectory.appending(component: $0) }
+                .filter { $0.pathExtension == "xcframework" }
+
+            // Only a single unambiguous match is safe to adopt.
+            return xcFrameworks.count == 1 ? xcFrameworks.first : nil
         }
 
         private func resolveTargetFullPath(
