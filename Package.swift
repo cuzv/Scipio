@@ -37,8 +37,11 @@ let package = Package(
                  from: "4.2.1"),
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON.git",
                  from: "5.0.2"),
-        .package(url: "https://github.com/giginet/PackageManifestKit",
-                 from: "0.3.0"),
+        // Fork pin: carries the tolerant decoding of build-setting kinds that a newer
+        // SwiftPM emits (e.g. `defaultIsolation`). Revert to the upstream `from:` requirement
+        // once that fix lands in a released PackageManifestKit.
+        .package(url: "https://github.com/cuzv/PackageManifestKit",
+                 branch: "tolerate-unknown-build-settings"),
         .package(url: "https://github.com/mtj0928/swift-async-operations.git",
                  from: "0.5.0"),
     ],
