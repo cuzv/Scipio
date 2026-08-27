@@ -99,6 +99,12 @@ let package = Package(
             capability: .buildTool()
         ),
         .testTarget(
+            name: "ScipioTests",
+            dependencies: [
+                .target(name: "scipio"),
+            ]
+        ),
+        .testTarget(
             name: "ScipioKitTests",
             dependencies: [
                 .target(name: "ScipioKit"),
