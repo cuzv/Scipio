@@ -1,5 +1,6 @@
 import Foundation
 import CacheStorage
+import ScipioKitCore
 
 public typealias PlatformMatrix = [String: Set<SDK>]
 
@@ -79,7 +80,9 @@ public struct Runner {
 
         try fileSystem.createDirectory(outputDir, recursive: true)
 
-        let buildOptionsMatrix = try options.buildOptionsContainer.makeBuildOptionsMatrix(descriptionPackage: descriptionPackage)
+        let buildOptionsMatrix = try options.buildOptionsContainer
+            .scopingLibraryEvolution(options.libraryEvolutionScope, in: descriptionPackage.graph)
+            .makeBuildOptionsMatrix(descriptionPackage: descriptionPackage)
 
         let producer = FrameworkProducer(
             descriptionPackage: descriptionPackage,
@@ -298,6 +301,14 @@ extension Runner {
             case specific(Set<Platform>)
         }
 
+        /// Which targets Library Evolution applies to when it is enabled.
+        public enum LibraryEvolutionScope: Sendable, Equatable {
+            /// Every built target, dependencies included. (default)
+            case everyTarget
+            /// Only the modules the package being built defines itself.
+            case rootPackageOnly
+        }
+
         public enum Platform: String, Hashable, Sendable {
             case iOS
             case macOS
@@ -308,6 +319,7 @@ extension Runner {
         }
 
         public var buildOptionsContainer: BuildOptionsContainer
+        public var libraryEvolutionScope: LibraryEvolutionScope
         public var shouldOnlyUseVersionsFromResolvedFile: Bool
         public var frameworkCachePolicies: [FrameworkCachePolicy]
         public var resolvedPackagesCachePolicies: [ResolvedPackagesCachePolicy]
@@ -322,6 +334,7 @@ extension Runner {
         public init(
             baseBuildOptions: BuildOptions = .init(),
             buildOptionsMatrix: [String: TargetBuildOptions] = [:],
+            libraryEvolutionScope: LibraryEvolutionScope = .everyTarget,
             shouldOnlyUseVersionsFromResolvedFile: Bool = false,
             frameworkCachePolicies: [FrameworkCachePolicy] = [.project],
             resolvedPackagesCachePolicies: [ResolvedPackagesCachePolicy] = [.project],
@@ -332,6 +345,7 @@ extension Runner {
                 baseBuildOptions: baseBuildOptions,
                 buildOptionsMatrix: buildOptionsMatrix
             )
+            self.libraryEvolutionScope = libraryEvolutionScope
             self.shouldOnlyUseVersionsFromResolvedFile = shouldOnlyUseVersionsFromResolvedFile
             self.frameworkCachePolicies = frameworkCachePolicies
             self.resolvedPackagesCachePolicies = resolvedPackagesCachePolicies
@@ -472,6 +486,33 @@ extension Runner.Options.BuildOptions {
 }
 
 extension Runner.Options.BuildOptionsContainer {
+    /// Pins Library Evolution per target when the scope asks for it.
+    ///
+    /// Only the frameworks built from the root package are distributed; the dependencies are built
+    /// here merely to link against, and third-party sources are not always resilience-clean
+    /// (an `@inlinable` designated initializer of a class, say, is an error only under
+    /// `-enable-library-evolution`). Compiling them resiliently therefore buys nothing and can fail
+    /// the whole run for a diagnostic that does not concern the shipped product.
+    fileprivate func scopingLibraryEvolution(
+        _ scope: Runner.Options.LibraryEvolutionScope,
+        in graph: ModulesGraph
+    ) -> Self {
+        guard scope == .rootPackageOnly, baseBuildOptions.enableLibraryEvolution else {
+            return self
+        }
+
+        let rootModuleNames = Set(graph.rootPackage.targets.map(\.name))
+        var container = self
+        // Every module is pinned explicitly, root ones included, so that a target's setting never
+        // depends on which product's build the PIF was generated for.
+        for module in graph.allModules {
+            var targetOptions = container.buildOptionsMatrix[module.name] ?? .init()
+            targetOptions.enableLibraryEvolution = rootModuleNames.contains(module.name)
+            container.buildOptionsMatrix[module.name] = targetOptions
+        }
+        return container
+    }
+
     fileprivate func makeBuildOptions(descriptionPackage: DescriptionPackage) throws -> BuildOptions {
         try baseBuildOptions.makeBuildOptions(descriptionPackage: descriptionPackage)
     }

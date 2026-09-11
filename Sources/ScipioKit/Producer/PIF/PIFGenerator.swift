@@ -133,7 +133,11 @@ struct PIFGenerator {
             .append(librarySearchPaths.path(percentEncoded: false))
 
         // Enable to emit swiftinterface
-        if buildOptions.enableLibraryEvolution {
+        // Resolved per target: `buildOptions` describes the product being built, so a target the
+        // matrix speaks about has to be honoured here, exactly like `frameworkType` above.
+        let enableLibraryEvolution = buildOptionsMatrix[name]?.enableLibraryEvolution
+            ?? buildOptions.enableLibraryEvolution
+        if enableLibraryEvolution {
             configuration.buildSettings["OTHER_SWIFT_FLAGS"]
                 .append("-enable-library-evolution")
             configuration.buildSettings["SWIFT_EMIT_MODULE_INTERFACE"] = "YES"

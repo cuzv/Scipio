@@ -54,6 +54,7 @@ extension Runner {
         )
         let runnerOptions = Runner.Options(
             baseBuildOptions: baseBuildOptions,
+            libraryEvolutionScope: buildOptions.shouldLimitLibraryEvolutionToRootPackage ? .rootPackageOnly : .everyTarget,
             shouldOnlyUseVersionsFromResolvedFile: buildOptions.shouldOnlyUseVersionsFromResolvedFile,
             frameworkCachePolicies: Self.frameworkCachePolicies(from: commandType),
             resolvedPackagesCachePolicies: Self.resolvedPackagesCachePolicies(from: commandType),

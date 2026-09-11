@@ -38,6 +38,10 @@ struct BuildOptionGroup: ParsableArguments {
           help: "Whether to enable Library Evolution feature or not")
     var shouldEnableLibraryEvolution = false
 
+    @Flag(name: [.customLong("library-evolution-root-package-only")],
+          help: "Whether to limit Library Evolution to the modules the built package defines itself. Dependencies, which are not distributed, are built without it.")
+    var shouldLimitLibraryEvolutionToRootPackage = false
+
     @Flag(name: [.customLong("strip-static-lib-dwarf-symbols")],
           inversion: .prefixedNo,
           help: "Whether to strip DWARF symbol from static built binary or not")
